@@ -11,16 +11,15 @@ type Session struct {
 	ID        string
 	UserID    string
 	ExpiresAt time.Time
-	CSRF      string
+	JSON      string
 }
 
 // New returns a new user Session
-func New(userID string, duration time.Duration) (*Session, error) {
-	csrf, err := generateNewCsrfString()
+func New(userID string, json string, duration time.Duration) *Session {
 	return &Session{
 		ID:        uuid.New(),
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(duration).UTC(),
-		CSRF:      csrf,
-	}, err
+		JSON:      json,
+	}
 }

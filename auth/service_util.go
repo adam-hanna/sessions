@@ -1,4 +1,4 @@
-package sessions
+package auth
 
 import (
 	"crypto/hmac"
@@ -13,31 +13,6 @@ var (
 	// ErrBase64Decode is thrown when a byte slice could not be base64 decoded
 	ErrBase64Decode = errors.New("Base64 decoding failed")
 )
-
-// setDefaultOptions sets default values for nil fields
-// note @adam-hanna: this utility function should be improved. The fields and types of the options struct \
-// 			         should not be hardcoded!
-func setDefaultOptions(opts *Options) {
-	emptyOpts := Options{}
-	if opts.ExpirationDuration == emptyOpts.ExpirationDuration {
-		opts.ExpirationDuration = DefaultExpirationDuration
-	}
-	if opts.CSRFHeaderKey == emptyOpts.CSRFHeaderKey {
-		opts.CSRFHeaderKey = DefaultCSRFHeaderKey
-	}
-}
-
-// signAndEncodeSessionID signs the sessionID with they key and returns a base64 encoded byte slice
-func (s *Service) signAndEncodeSessionID(sessionID string) []byte {
-	userSessionIDBytes := []byte(sessionID)
-	signedBytes := signHMAC(&userSessionIDBytes, &s.options.Key)
-
-	// append the signature to the session id
-	sessionValBytes := make([]byte, len(userSessionIDBytes)+len(signedBytes))
-	sessionValBytes = append(userSessionIDBytes, signedBytes...)
-
-	return encode(sessionValBytes)
-}
 
 // Thanks! https://github.com/gorilla/securecookie
 // encode encodes a value using base64.

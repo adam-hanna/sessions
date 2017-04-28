@@ -1,10 +1,13 @@
 package store
 
 import (
-	"github.com/garyburd/redigo/redis"
+	"github.com/adam-hanna/sessions/sessionerrs"
+	"github.com/adam-hanna/sessions/user"
 )
 
-// ServiceInterface defines the behavior of the Redis struct
+// ServiceInterface defines the behavior of the session store
 type ServiceInterface interface {
-	GetConnectionFromPool() redis.Conn
+	SaveUserSession(userSession *user.Session) *sessionerrs.Custom
+	DeleteUserSession(sessionID string) *sessionerrs.Custom
+	FetchValidUserSession(sessionID string) (*user.Session, *sessionerrs.Custom)
 }

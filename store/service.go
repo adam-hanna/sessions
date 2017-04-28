@@ -1,14 +1,12 @@
 package store
 
 import (
+	"errors"
 	"time"
 
+	"github.com/adam-hanna/sessions/sessionerrs"
+	"github.com/adam-hanna/sessions/user"
 	"github.com/garyburd/redigo/redis"
-)
-
-var (
-	// Opts is used to store the behavior of the service
-	Opts Options
 )
 
 const (
@@ -24,10 +22,11 @@ const (
 
 // Service is a session store backed by a redis db
 type Service struct {
-	pool *redis.Pool
+	// Pool is a redigo *redis.Pool
+	Pool *redis.Pool
 }
 
-// Options dictates the behavior of the session store
+// Options defines the behavior of the session store
 type Options struct {
 	ConnectionAddress    string
 	MaxIdleConnections   int
@@ -35,24 +34,115 @@ type Options struct {
 	IdleTimeoutDuration  time.Duration
 }
 
-func init() {
-
-}
-
 // New returns a new session store connected to a redis db
-func New(opts Options) *Service {
-	setDefaultOptions(&opts)
+// Alternatively, you can build your own redis store with &Service{Pool: yourCustomPool,}
+func New(options Options) *Service {
+	setDefaultOptions(&options)
 	return &Service{
-		pool: &redis.Pool{
-			MaxActive:   opts.MaxActiveConnections,
-			MaxIdle:     opts.MaxIdleConnections,
-			IdleTimeout: opts.IdleTimeoutDuration,
-			Dial:        func() (redis.Conn, error) { return redis.Dial("tcp", opts.ConnectionAddress) },
+		Pool: &redis.Pool{
+			MaxActive:   options.MaxActiveConnections,
+			MaxIdle:     options.MaxIdleConnections,
+			IdleTimeout: options.IdleTimeoutDuration,
+			Dial:        func() (redis.Conn, error) { return redis.Dial("tcp", options.ConnectionAddress) },
 		},
 	}
 }
 
-// GetConnectionFromPool creates a new session from a pool
-func (s *Service) GetConnectionFromPool() redis.Conn {
-	return s.pool.Get()
+// SaveUserSession saves a user session in the store
+func (s *Service) SaveUserSession(userSession *user.Session) *sessionerrs.Custom {
+	c := s.Pool.Get()
+	defer c.Close()
+
+	// note @adam-hanna: should I pipeline these requests?
+	_, err := c.Do("HMSET", userSession.ID, "UserID", userSession.UserID, "JSON", userSession.JSON, "ExpiresAtSeconds", userSession.ExpiresAt.Unix())
+	if err != nil {
+		return &sessionerrs.Custom{
+			Code: 500,
+			Err:  err,
+		}
+	}
+
+	// set the expiration time of the redis key
+	_, err = c.Do("EXPIREAT", userSession.ID, userSession.ExpiresAt.Unix())
+	if err != nil {
+		return &sessionerrs.Custom{
+			Code: 500,
+			Err:  err,
+		}
+	}
+
+	return nil
+}
+
+// DeleteUserSession deletes a user session from the store
+func (s *Service) DeleteUserSession(sessionID string) *sessionerrs.Custom {
+	// grab a redis connection from the pool
+	c := s.Pool.Get()
+	defer c.Close()
+
+	// set the expiration time of the redis key
+	aLongTimeAgo := time.Now().Add(-1000 * time.Hour)
+	_, err := c.Do("EXPIREAT", sessionID, aLongTimeAgo.Unix())
+	if err != nil {
+		return &sessionerrs.Custom{
+			Code: 500,
+			Err:  err,
+		}
+	}
+
+	return nil
+}
+
+// FetchValidUserSession returns a valid user session or an err if the session has expired or does not exist
+func (s *Service) FetchValidUserSession(sessionID string) (*user.Session, *sessionerrs.Custom) {
+	// check the session id in the database
+	// first, grab a redis connection from the pool
+	c := s.Pool.Get()
+	defer c.Close()
+
+	// note @adam-hanna: should I pipeline these requests?
+	// check if the key exists
+	exists, err := redis.Bool(c.Do("EXISTS", sessionID))
+	if err != nil {
+		return nil, &sessionerrs.Custom{
+			Code: 500,
+			Err:  err,
+		}
+	}
+	if !exists {
+		return nil, &sessionerrs.Custom{
+			Code: 401,
+			Err:  errors.New("session is expired or sessionID doesn't exist"),
+		}
+	}
+
+	var userID string
+	var json string
+	var expiresAtSeconds int64
+	reply, err := redis.Values(c.Do("HMGET", sessionID, "UserID", "JSON", "ExpiresAtSeconds"))
+	if err != nil {
+		return nil, &sessionerrs.Custom{
+			Code: 500,
+			Err:  err,
+		}
+	}
+	if len(reply) < 3 {
+		return nil, &sessionerrs.Custom{
+			Code: 500,
+			Err:  errors.New("error retrieving session data from store"),
+		}
+	}
+	if _, err := redis.Scan(reply, &userID, &json, &expiresAtSeconds); err != nil {
+		return nil, &sessionerrs.Custom{
+			Code: 500,
+			Err:  err,
+		}
+	}
+
+	return &user.Session{
+		ID:        sessionID,
+		UserID:    userID,
+		JSON:      json,
+		ExpiresAt: time.Unix(expiresAtSeconds, 0),
+	}, nil
 }

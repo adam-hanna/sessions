@@ -7,10 +7,10 @@ import (
 	"github.com/adam-hanna/sessions/user"
 )
 
-// ServiceInterface is used to track state in an http application
+// ServiceInterface defines the methods performed by the session service
 type ServiceInterface interface {
-	IssueUserSession(userID string, w http.ResponseWriter) (*user.Session, *sessionerrs.Custom)
+	IssueUserSession(userID string, json string, w http.ResponseWriter) (*user.Session, *sessionerrs.Custom)
 	ClearUserSession(userSession *user.Session, w http.ResponseWriter) *sessionerrs.Custom
 	GetUserSession(r *http.Request) (*user.Session, *sessionerrs.Custom)
-	RefreshUserSession(userSession *user.Session, w http.ResponseWriter) *sessionerrs.Custom
+	ExtendUserSession(userSession *user.Session, r *http.Request, w http.ResponseWriter) *sessionerrs.Custom
 }
