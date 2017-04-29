@@ -56,6 +56,13 @@ func (s *Service) VerifyAndDecode(signed string) (string, *sessionerrs.Custom) {
 	}
 
 	// note: session uuid's are always 36 bytes long
+	if len(decodedSessionValueBytes) <= 36 {
+		// note @adam-hanna: is 401 the proper http status code, here?
+		return "", &sessionerrs.Custom{
+			Code: 401,
+			Err:  errors.New("invalid session"),
+		}
+	}
 	sessionIDBytes := decodedSessionValueBytes[:36]
 	hmacBytes := decodedSessionValueBytes[36:]
 	// fmt.Printf("In auth.VerifyAndDecode\nsessionID: %s\nsig: %x\nkey: %s\n", string(sessionIDBytes[:]), string(hmacBytes[:]), string(s.options.Key[:]))
