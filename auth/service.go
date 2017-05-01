@@ -6,6 +6,16 @@ import (
 	"github.com/adam-hanna/sessions/sessionerrs"
 )
 
+// note @adam-hanna: can these be constants?
+var (
+	// ErrNoSessionKey is thrown when no key was provided for HMAC signing
+	ErrNoSessionKey = errors.New("no session key")
+	// ErrMalformedSession is thrown when the session value doesn't conform to expectations
+	ErrMalformedSession = errors.New("malformed session")
+	// ErrInvalidSessionSignature the signature included with the session can't be verified with the provided session key
+	ErrInvalidSessionSignature = errors.New("invalid session signature")
+)
+
 // Service performs signing and verification actions using HMAC
 type Service struct {
 	options Options
@@ -21,9 +31,9 @@ type Options struct {
 func New(options Options) (*Service, *sessionerrs.Custom) {
 	// note @adam-hanna: should we perform other checks like min/max length?
 	if len(options.Key) == 0 {
-		return &Service{}, &sessionerrs.Custom{
+		return nil, &sessionerrs.Custom{
 			Code: 500,
-			Err:  errors.New("no session key"),
+			Err:  ErrNoSessionKey,
 		}
 	}
 	return &Service{
@@ -31,7 +41,7 @@ func New(options Options) (*Service, *sessionerrs.Custom) {
 	}, nil
 }
 
-// SignAndBase64Encode signs the sessionID with they key and returns a base64 encoded string
+// SignAndBase64Encode signs the sessionID with the key and returns a base64 encoded string
 func (s *Service) SignAndBase64Encode(sessionID string) (string, *sessionerrs.Custom) {
 	userSessionIDBytes := []byte(sessionID)
 	signedBytes := signHMAC(&userSessionIDBytes, &s.options.Key)
@@ -55,7 +65,14 @@ func (s *Service) VerifyAndDecode(signed string) (string, *sessionerrs.Custom) {
 		}
 	}
 
-	// note: session uuid's are always 36 bytes long
+	// note: session uuid's are always 36 bytes long. This will make it difficult to switch to a new uuid algorithm!
+	if len(decodedSessionValueBytes) <= 36 {
+		// note @adam-hanna: is 401 the proper http status code, here?
+		return "", &sessionerrs.Custom{
+			Code: 401,
+			Err:  ErrMalformedSession,
+		}
+	}
 	sessionIDBytes := decodedSessionValueBytes[:36]
 	hmacBytes := decodedSessionValueBytes[36:]
 	// fmt.Printf("In auth.VerifyAndDecode\nsessionID: %s\nsig: %x\nkey: %s\n", string(sessionIDBytes[:]), string(hmacBytes[:]), string(s.options.Key[:]))
@@ -65,7 +82,7 @@ func (s *Service) VerifyAndDecode(signed string) (string, *sessionerrs.Custom) {
 	if !verified {
 		return "", &sessionerrs.Custom{
 			Code: 401,
-			Err:  errors.New("invalid session signature"),
+			Err:  ErrInvalidSessionSignature,
 		}
 	}
 

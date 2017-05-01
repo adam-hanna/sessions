@@ -9,9 +9,9 @@ func setDefaultOptions(options *Options) {
 		options.ConnectionAddress = DefaultConnectionAddress
 	}
 	// note @adam-hanna: what if someone sends in a value of 0? This will set it to default!
-	// if options.MaxIdleConnections == emptyOptions.MaxIdleConnections {
-	// 	options.MaxIdleConnections = DefaultMaxIdleConnections
-	// }
+	if options.MaxIdleConnections == emptyOptions.MaxIdleConnections {
+		options.MaxIdleConnections = DefaultMaxIdleConnections
+	}
 	// note @adam-hanna: what if someone sends in a value of 0? This will set it to default!
 	// if options.MaxActiveConnections == emptyOptions.MaxActiveConnections {
 	// 	options.MaxActiveConnections = DefaultMaxActiveConnections
