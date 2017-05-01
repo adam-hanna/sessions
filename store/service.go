@@ -132,6 +132,14 @@ func (s *Service) FetchValidUserSession(sessionID string) (*user.Session, *sessi
 			Err:  errors.New("error retrieving session data from store"),
 		}
 	}
+	for idx := range reply {
+		if reply[idx] == nil {
+			return nil, &sessionerrs.Custom{
+				Code: 500,
+				Err:  errors.New("error retrieving session data from store"),
+			}
+		}
+	}
 	if _, err := redis.Scan(reply, &userID, &json, &expiresAtSeconds); err != nil {
 		return nil, &sessionerrs.Custom{
 			Code: 500,

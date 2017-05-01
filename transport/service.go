@@ -72,8 +72,8 @@ func (s *Service) DeleteSessionFromResponse(w http.ResponseWriter) *sessionerrs.
 	return nil
 }
 
-// FetchSessionFromRequest retrieves a signed session id from a request
-func (s *Service) FetchSessionFromRequest(r *http.Request) (string, *sessionerrs.Custom) {
+// FetchSessionIDFromRequest retrieves a signed session id from a request
+func (s *Service) FetchSessionIDFromRequest(r *http.Request) (string, *sessionerrs.Custom) {
 	sessionCookie, err := r.Cookie(s.options.CookieName)
 	if err != nil {
 		if err == http.ErrNoCookie {

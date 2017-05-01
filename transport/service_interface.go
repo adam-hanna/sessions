@@ -11,5 +11,5 @@ import (
 type ServiceInterface interface {
 	SetSessionOnResponse(session string, userSession *user.Session, w http.ResponseWriter) *sessionerrs.Custom
 	DeleteSessionFromResponse(w http.ResponseWriter) *sessionerrs.Custom
-	FetchSessionFromRequest(r *http.Request) (string, *sessionerrs.Custom)
+	FetchSessionIDFromRequest(r *http.Request) (string, *sessionerrs.Custom)
 }

@@ -81,7 +81,7 @@ func (s *Service) ClearUserSession(userSession *user.Session, w http.ResponseWri
 // sessions that have expired, or that fail signature verification will return a custom session error with code 401
 func (s *Service) GetUserSession(r *http.Request) (*user.Session, *sessionerrs.Custom) {
 	// read the session from the request
-	signedSessionID, err := s.transport.FetchSessionFromRequest(r)
+	signedSessionID, err := s.transport.FetchSessionIDFromRequest(r)
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +97,8 @@ func (s *Service) GetUserSession(r *http.Request) (*user.Session, *sessionerrs.C
 }
 
 // ExtendUserSession extends the ExpiresAt of a session by the Options.ExpirationDuration
+//
+// Note that this function must be called, manually! Extension of user session expiry's does not happen automatically!
 func (s *Service) ExtendUserSession(userSession *user.Session, r *http.Request, w http.ResponseWriter) *sessionerrs.Custom {
 	newExpiresAt := time.Now().Add(s.options.ExpirationDuration).UTC()
 
@@ -110,7 +112,7 @@ func (s *Service) ExtendUserSession(userSession *user.Session, r *http.Request, 
 	}
 
 	// fetch the signed session id from the request
-	signedSessionID, err := s.transport.FetchSessionFromRequest(r)
+	signedSessionID, err := s.transport.FetchSessionIDFromRequest(r)
 	if err != nil {
 		return err
 	}
