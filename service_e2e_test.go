@@ -250,11 +250,43 @@ func TestMain(m *testing.M) {
 func setup() error {
 	log.Println("setting up e2e tests")
 
+	// set up the session service
+	seshStore = store.New(store.Options{})
+
+	// e.g. `$ openssl rand -base64 64`
+	authKey := "DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="
+	authOptions := auth.Options{
+		Key: []byte(authKey),
+	}
+	seshAuth, customErr := auth.New(authOptions)
+	if customErr != nil {
+		return customErr.Err
+	}
+
+	transportOptions := transport.Options{
+		Secure: false, // note: can't use secure cookies in development!
+	}
+	seshTransport := transport.New(transportOptions)
+
+	seshOptions := Options{
+		ExpirationDuration: 5 * time.Second,
+	}
+	sesh = New(seshStore, seshAuth, seshTransport, seshOptions)
+
+	// make sure that we can connect
+	c := seshStore.Pool.Get()
+	defer c.Close()
+
+	_, err := c.Do("PING")
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func shutdown() error {
-	log.Println("shutting down redis e2e tests")
+	log.Println("shutting down e2e tests")
 
 	c := seshStore.Pool.Get()
 	defer c.Close()
@@ -279,38 +311,6 @@ func TestE2E(t *testing.T) {
 
 	log.Println("running e2e tests")
 
-	// set up the session service
-	seshStore = store.New(store.Options{})
-
-	// e.g. `$ openssl rand -base64 64`
-	authKey := "DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="
-	authOptions := auth.Options{
-		Key: []byte(authKey),
-	}
-	seshAuth, customErr := auth.New(authOptions)
-	if customErr != nil {
-		log.Fatal(customErr)
-	}
-
-	transportOptions := transport.Options{
-		Secure: false, // note: can't use secure cookies in development!
-	}
-	seshTransport := transport.New(transportOptions)
-
-	seshOptions := Options{
-		ExpirationDuration: 5 * time.Second,
-	}
-	sesh = New(seshStore, seshAuth, seshTransport, seshOptions)
-
-	// make sure that we can connect
-	c := seshStore.Pool.Get()
-	defer c.Close()
-
-	_, err := c.Do("PING")
-	if err != nil {
-		t.Errorf("Could not ping redis server. Error: %s\n", err.Error())
-	}
-
 	// set up the test servers
 	issueServer := httptest.NewServer(recoverHandler(issueSession))
 	defer issueServer.Close()
@@ -331,7 +331,7 @@ func TestE2E(t *testing.T) {
 		t.Errorf("Expected unathorized (401), received: %d\n", res.StatusCode)
 	}
 
-	// not let's get a valid session
+	// now let's get a valid session
 	res, err = http.Get(issueServer.URL)
 	if err != nil {
 		t.Errorf("Couldn't send request to test server; Err: %v\n", err)
