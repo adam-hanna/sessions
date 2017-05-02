@@ -1,8 +1,18 @@
-# Go Sessions
+[![Build Status](https://travis-ci.org/adam-hanna/sessions.svg)](https://travis-ci.org/adam-hanna/sessions) [![Coverage Status](https://coveralls.io/repos/github/adam-hanna/sessions/badge.svg)](https://coveralls.io/github/adam-hanna/sessions) [![Go Report Card](https://goreportcard.com/badge/github.com/adam-hanna/sessions)](https://goreportcard.com/report/github.com/adam-hanna/sessions) [![GoDoc](https://godoc.org/github.com/adam-hanna/sessions?status.svg)](https://godoc.org/github.com/adam-hanna/sessions)
+
+# Sessions
 A dead simple, highly customizable sessions service for go http servers
 
-## Quickstart
+**README Contents:**
 
+1. [Quickstart](https://github.com/adam-hanna/sessions#quickstart)
+2. [Performance](https://github.com/adam-hanna/sessions#performance)
+3. [API](https://github.com/adam-hanna/sessions#api)
+4. [Test Coverage](https://github.com/adam-hanna/sessions#test-coverage)
+5. [Example](https://github.com/adam-hanna/sessions#example)
+6. [License](https://github.com/adam-hanna/sessions#license)
+
+## Quickstart
 ~~~go
 package main
 
@@ -52,12 +62,85 @@ func main() {
 }
 ~~~
 
-## Testing
-Tests are broken down into three categories: unit, integration and e2e. Integration and e2e tests require a connection to a redis server. The connection address can be set in the `REDIS_URL` environment variable. The default is ":6379"
+## Performance
+Benchmarks require a redis-server running. Set the `REDIS_URL` environment variable, otherwise the benchmarks look for ":6379".
+
+YMMV
+~~~ bash
+$ (cd benchmark && go test -bench=.)
+
+setting up benchmark tests
+BenchmarkBaseServer-2              20000             72479 ns/op
+BenchmarkValidSession-2            10000            151650 ns/op
+PASS
+shutting down benchmark tests
+ok      github.com/adam-hanna/sessions/benchmark        3.727s
+~~~
+
+## API
+### [user.Session](https://godoc.org/github.com/adam-hanna/sessions#Session)
+~~~go
+type Session struct {
+	ID        string
+	UserID    string
+	ExpiresAt time.Time
+	JSON      string
+}
+~~~
+Session is the struct that is used to store session data. The JSON field allows you to set any custom information you'd like. See the [example](https://github.com/adam-hanna/sessions#example)
+
+### [IssueUserSession](https://godoc.org/github.com/adam-hanna/sessions#IssueUserSession)
+~~~ go
+func (s *Service) IssueUserSession(userID string, json string, w http.ResponseWriter) (*user.Session, *sessionerrs.Custom)
+~~~
+IssueUserSession grants a new user session, writes that session info to the store and writes the session on the http.ResponseWriter.
+
+This method should be called when a user logs in, for example.
+
+### [ClearUserSession](https://godoc.org/github.com/adam-hanna/sessions#ClearUserSession)
+~~~go
+func (s *Service) ClearUserSession(userSession *user.Session, w http.ResponseWriter) *sessionerrs.Custom
+~~~
+ClearUserSession is used to remove the user session from the store and clear the cookies on the ResponseWriter.
+
+This method should be called when a user logs out, for example.
+
+### [GetUserSession](https://godoc.org/github.com/adam-hanna/sessions#GetUserSession)
+~~~go
+func (s *Service) GetUserSession(r *http.Request) (*user.Session, *sessionerrs.Custom)
+~~~
+GetUserSession returns a user session from a request. This method only returns valid sessions. Therefore, sessions that have expired, or that fail signature verification will return a custom session error with code 401.
+
+### [ExtendUserSession](https://godoc.org/github.com/adam-hanna/sessions#ExtendUserSession)
+~~~go
+func (s *Service) ExtendUserSession(userSession *user.Session, r *http.Request, w http.ResponseWriter) *sessionerrs.Custom
+~~~
+ExtendUserSession extends the ExpiresAt of a session by the Options.ExpirationDuration
+
+Note that this function must be called, manually! Extension of user session expiry's does not happen automatically!
+
+## Testing Coverage
+~~~bash
+ok      github.com/adam-hanna/sessions				9.012s  coverage: 94.1% of statements
+?       github.com/adam-hanna/sessions/sessionerrs	[no test files]
+ok      github.com/adam-hanna/sessions/auth			0.003s  coverage: 100.0% of statements
+ok      github.com/adam-hanna/sessions/store		0.006s  coverage: 85.4% of statements
+ok      github.com/adam-hanna/sessions/benchmark	0.004s  coverage: 0.0% of statements [no tests to run]
+ok      github.com/adam-hanna/sessions/transport	0.004s  coverage: 95.2% of statements
+ok      github.com/adam-hanna/sessions/user			0.003s  coverage: 100.0% of statements
+~~~
+
+Tests are broken down into three categories: unit, integration and e2e. Integration and e2e tests require a connection to a redis server. The connection address can be set in the `REDIS_URL` environment variable. The default is ":6379".
 
 To run all tests, simply:
 ~~~
 $ go test -tags="unit integration e2e" ./...
+
+// or
+$ make test
+
+// or
+$ make test-cover-html && go tool cover -html=coverage-all.out
 ~~~
 
 To run only tests from one of the categories:
@@ -271,4 +354,29 @@ func generateKey() (string, error) {
 	}
 	return base64.URLEncoding.EncodeToString(b), nil
 }
+~~~
+
+## License
+~~~
+The MIT License (MIT)
+
+Copyright (c) 2017 Adam Hanna
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ~~~
