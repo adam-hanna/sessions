@@ -202,7 +202,7 @@ func BenchmarkValidSession(b *testing.B) {
 			b.Fatal("Get:", err)
 		}
 		if res.StatusCode != 200 {
-			b.Errorf("Wanted 200 status code, received: %d\n", res.StatusCode)
+			b.Fatalf("Wanted 200 status code, received: %d\n", res.StatusCode)
 		}
 	}
 }
