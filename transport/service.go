@@ -15,9 +15,9 @@ const (
 	// DefaultCookiePath is the default cookie path
 	DefaultCookiePath = "/"
 	// DefaultHTTPOnlyCookie is the default HTTPOnly option of the cookie
-	DefaultHTTPOnlyCookie = true
+	// DefaultHTTPOnlyCookie = true // changing this to false, the uninitialized val, for now
 	// DefaultSecureCookie is the default Secure option of the cookie
-	DefaultSecureCookie = true
+	// DefaultSecureCookie = true // changing this to false, the uninitialized val, for now
 )
 
 // Service writes sessions on responseWriters and reads sessions from requests

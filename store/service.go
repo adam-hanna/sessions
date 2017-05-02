@@ -15,7 +15,7 @@ const (
 	// DefaultMaxIdleConnections sets the maximum number of idle connections on the redis server
 	DefaultMaxIdleConnections = 3
 	// DefaultMaxActiveConnections sets the maximum number of active connections on the redis server
-	DefaultMaxActiveConnections = 10
+	// DefaultMaxActiveConnections = 10 // changing this to 0, the uninitialized val, for now
 	// DefaultIdleTimeoutDuration sets the maximum duration to wait before closing an idle connection on the redis server
 	DefaultIdleTimeoutDuration = 10 * time.Second
 )
