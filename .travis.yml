@@ -1,0 +1,20 @@
+language: go
+go:
+- 1.7.x
+# branches:
+#   only:
+#   - feature/travisCI
+env:
+  global:
+    secure: hEiVIu1nvTloePPm72L6867b8h11/dxydcbpqoujUE89n5MiFh0zo/Du05N0eYjlmjANq3uvVGgHnWNSX4l8yqZf1QcOE2yvs9e06vqMZbK6iryT2Mm8KuLFgpHulQinz/SSJo6Kw4o8UXhJT9r80YqpgOT6EZX/2YRetz/kYQqI+qe6GqYSDZVATYgG54E0puLR0hBNwWuGfjWCmiGXFuIJl8mEqnx9rd4B8VPARMWToVvTo/IC3O1zpNPMV9zDcC3CG+/quQJHFELpCB1c7SHEYClKeZrVnrqcoGgs+3z3P0wPfXo+fTragRhtLf5Ynbru+Af1p3vzfcOjmVys+k6+b1cqS8GJ73k/+Y2L7QrrHrOZRJbA9ATYobXSfPFbCCw+iRRHnwZDHnZlMt8mQkn+LA0SH+YRNiyLRhgqPOKr00UwzMoi4ckDd6PjhT5SuWaoiADDFuxZ5Ld+VbWoNoLHeVtt+Kn+nR9PhOJ0taWnOKo6VOVg2oainR5vERuuP/JOG+sH1lN8LTjxHERb9Zx0zZowDczvLi0mD7ehoOwBp3fpuJ5FOSZyI8+jB0dZTzaOTBQWve71SQzGt7z9eXAzA8RNTkBt/MTCf9k0qqVD6n237nkMZMaluOeQ8ez6O8v1H2nZ9R/BrWcLhFwjLg+8294MCNYjcKmzhg6S5cY=
+services:
+  - redis-server
+install:
+- go get golang.org/x/tools/cmd/cover
+- go get github.com/mattn/goveralls
+- go get github.com/garyburd/redigo/redis
+- go get github.com/pborman/uuid
+script:
+- make test-cover-html
+- $(go env GOPATH | awk 'BEGIN{FS=":"} {print $1}')/bin/goveralls -coverprofile=coverage-all.out
+  -service=travis-ci -repotoken=$COVERALLS_TOKEN
