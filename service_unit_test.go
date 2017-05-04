@@ -9,12 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adam-hanna/sessions/sessionerrs"
 	"github.com/adam-hanna/sessions/user"
 )
 
 var (
-	MockedTestErr = sessionerrs.Custom{Code: -1, Err: errors.New("test err")}
+	MockedTestErr = errors.New("test err")
 
 	mockedStore     = MockedStoreType{}
 	mockedAuth      = MockedAuthType{}
@@ -39,83 +38,83 @@ var (
 type MockedAuthType struct {
 }
 
-func (a *MockedAuthType) SignAndBase64Encode(sessionID string) (string, *sessionerrs.Custom) {
+func (a *MockedAuthType) SignAndBase64Encode(sessionID string) (string, error) {
 	return "test", nil
 }
 
-func (a *MockedAuthType) VerifyAndDecode(signed string) (string, *sessionerrs.Custom) {
+func (a *MockedAuthType) VerifyAndDecode(signed string) (string, error) {
 	return "test", nil
 }
 
 type ErredAuthType struct {
 }
 
-func (b *ErredAuthType) SignAndBase64Encode(sessionID string) (string, *sessionerrs.Custom) {
-	return "", &MockedTestErr
+func (b *ErredAuthType) SignAndBase64Encode(sessionID string) (string, error) {
+	return "", MockedTestErr
 }
 
-func (b *ErredAuthType) VerifyAndDecode(signed string) (string, *sessionerrs.Custom) {
-	return "", &MockedTestErr
+func (b *ErredAuthType) VerifyAndDecode(signed string) (string, error) {
+	return "", MockedTestErr
 }
 
 type MockedStoreType struct {
 }
 
-func (c *MockedStoreType) SaveUserSession(userSession *user.Session) *sessionerrs.Custom {
+func (c *MockedStoreType) SaveUserSession(userSession *user.Session) error {
 	return nil
 }
 
-func (c *MockedStoreType) DeleteUserSession(sessionID string) *sessionerrs.Custom {
+func (c *MockedStoreType) DeleteUserSession(sessionID string) error {
 	return nil
 }
 
-func (c *MockedStoreType) FetchValidUserSession(sessionID string) (*user.Session, *sessionerrs.Custom) {
+func (c *MockedStoreType) FetchValidUserSession(sessionID string) (*user.Session, error) {
 	return userSession, nil
 }
 
 type ErredStoreType struct {
 }
 
-func (d *ErredStoreType) SaveUserSession(userSession *user.Session) *sessionerrs.Custom {
-	return &MockedTestErr
+func (d *ErredStoreType) SaveUserSession(userSession *user.Session) error {
+	return MockedTestErr
 }
 
-func (d *ErredStoreType) DeleteUserSession(sessionID string) *sessionerrs.Custom {
-	return &MockedTestErr
+func (d *ErredStoreType) DeleteUserSession(sessionID string) error {
+	return MockedTestErr
 }
 
-func (d *ErredStoreType) FetchValidUserSession(sessionID string) (*user.Session, *sessionerrs.Custom) {
-	return nil, &MockedTestErr
+func (d *ErredStoreType) FetchValidUserSession(sessionID string) (*user.Session, error) {
+	return nil, MockedTestErr
 }
 
 type MockedTransportType struct {
 }
 
-func (e *MockedTransportType) SetSessionOnResponse(session string, userSession *user.Session, w http.ResponseWriter) *sessionerrs.Custom {
+func (e *MockedTransportType) SetSessionOnResponse(session string, userSession *user.Session, w http.ResponseWriter) error {
 	return nil
 }
 
-func (e *MockedTransportType) DeleteSessionFromResponse(w http.ResponseWriter) *sessionerrs.Custom {
+func (e *MockedTransportType) DeleteSessionFromResponse(w http.ResponseWriter) error {
 	return nil
 }
 
-func (e *MockedTransportType) FetchSessionIDFromRequest(r *http.Request) (string, *sessionerrs.Custom) {
+func (e *MockedTransportType) FetchSessionIDFromRequest(r *http.Request) (string, error) {
 	return "test", nil
 }
 
 type ErredTransportType struct {
 }
 
-func (f *ErredTransportType) SetSessionOnResponse(session string, userSession *user.Session, w http.ResponseWriter) *sessionerrs.Custom {
-	return &MockedTestErr
+func (f *ErredTransportType) SetSessionOnResponse(session string, userSession *user.Session, w http.ResponseWriter) error {
+	return MockedTestErr
 }
 
-func (f *ErredTransportType) DeleteSessionFromResponse(w http.ResponseWriter) *sessionerrs.Custom {
-	return &MockedTestErr
+func (f *ErredTransportType) DeleteSessionFromResponse(w http.ResponseWriter) error {
+	return MockedTestErr
 }
 
-func (f *ErredTransportType) FetchSessionIDFromRequest(r *http.Request) (string, *sessionerrs.Custom) {
-	return "test", &MockedTestErr
+func (f *ErredTransportType) FetchSessionIDFromRequest(r *http.Request) (string, error) {
+	return "test", MockedTestErr
 }
 
 // TestNew tests the New function
@@ -146,7 +145,7 @@ func TestIssueUserSession(t *testing.T) {
 	var tests = []struct {
 		input               Service
 		expectedUserSession *user.Session
-		expectedErr         *sessionerrs.Custom
+		expectedErr         error
 	}{
 		{
 			Service{
@@ -156,7 +155,7 @@ func TestIssueUserSession(t *testing.T) {
 				options:   opts,
 			},
 			nil,
-			&MockedTestErr,
+			MockedTestErr,
 		},
 		{
 			Service{
@@ -166,7 +165,7 @@ func TestIssueUserSession(t *testing.T) {
 				options:   opts,
 			},
 			nil,
-			&MockedTestErr,
+			MockedTestErr,
 		},
 		{
 			Service{
@@ -176,7 +175,7 @@ func TestIssueUserSession(t *testing.T) {
 				options:   opts,
 			},
 			userSession, // note: when transport is erred, the session, as well as an error, get returned
-			&MockedTestErr,
+			MockedTestErr,
 		},
 		{
 			Service{
@@ -202,15 +201,10 @@ func TestIssueUserSession(t *testing.T) {
 			assertSession = tt.expectedUserSession.UserID == a.UserID && tt.expectedUserSession.JSON == a.JSON &&
 				tt.expectedUserSession.ExpiresAt.Sub(t1) < 1*time.Second
 		}
-		if e == nil {
-			assertErr = e == tt.expectedErr
-			e = &sessionerrs.Custom{}
-		} else {
-			assertErr = reflect.DeepEqual(*tt.expectedErr, *e)
-		}
+		assertErr = e == tt.expectedErr
 
 		if !assertSession || !assertErr {
-			t.Errorf("test #%d failed; input service: %v, assertSession: %t, assertErr: %t, expectedSession: %v, expectedErr: %v, received session: %v, received err: %v", idx+1, tt.input, assertSession, assertErr, tt.expectedUserSession, tt.expectedErr, *a, *e)
+			t.Errorf("test #%d failed; input service: %v, assertSession: %t, assertErr: %t, expectedSession: %v, expectedErr: %v, received session: %v, received err: %v", idx+1, tt.input, assertSession, assertErr, tt.expectedUserSession, tt.expectedErr, *a, e)
 		}
 	}
 }
@@ -221,7 +215,7 @@ func TestClearUserSession(t *testing.T) {
 
 	var tests = []struct {
 		input       Service
-		expectedErr *sessionerrs.Custom
+		expectedErr error
 	}{
 		{
 			Service{
@@ -230,7 +224,7 @@ func TestClearUserSession(t *testing.T) {
 				transport: &erredTransport,
 				options:   opts,
 			},
-			&MockedTestErr,
+			MockedTestErr,
 		},
 		{
 			Service{
@@ -239,7 +233,7 @@ func TestClearUserSession(t *testing.T) {
 				transport: &erredTransport,
 				options:   opts,
 			},
-			&MockedTestErr,
+			MockedTestErr,
 		},
 		{
 			Service{
@@ -269,7 +263,7 @@ func TestGetUserSession(t *testing.T) {
 	var tests = []struct {
 		input           Service
 		expectedSession *user.Session
-		expectedErr     *sessionerrs.Custom
+		expectedErr     error
 	}{
 		{
 			Service{
@@ -279,7 +273,7 @@ func TestGetUserSession(t *testing.T) {
 				options:   opts,
 			},
 			nil,
-			&MockedTestErr,
+			MockedTestErr,
 		},
 		{
 			Service{
@@ -289,7 +283,7 @@ func TestGetUserSession(t *testing.T) {
 				options:   opts,
 			},
 			nil,
-			&MockedTestErr,
+			MockedTestErr,
 		},
 		{
 			Service{
@@ -299,7 +293,7 @@ func TestGetUserSession(t *testing.T) {
 				options:   opts,
 			},
 			nil,
-			&MockedTestErr,
+			MockedTestErr,
 		},
 		{
 			Service{
@@ -331,7 +325,7 @@ func TestExtendUserSession(t *testing.T) {
 
 	var tests = []struct {
 		input       Service
-		expectedErr *sessionerrs.Custom
+		expectedErr error
 	}{
 		{
 			Service{
@@ -340,7 +334,7 @@ func TestExtendUserSession(t *testing.T) {
 				transport: &erredTransport,
 				options:   opts,
 			},
-			&MockedTestErr,
+			MockedTestErr,
 		},
 		{
 			Service{
@@ -349,7 +343,7 @@ func TestExtendUserSession(t *testing.T) {
 				transport: &erredTransport,
 				options:   opts,
 			},
-			&MockedTestErr,
+			MockedTestErr,
 		},
 		{
 			Service{

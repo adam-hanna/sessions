@@ -7,11 +7,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"reflect"
 	"testing"
 	"time"
 
-	"github.com/adam-hanna/sessions/sessionerrs"
 	"github.com/adam-hanna/sessions/user"
 	"github.com/garyburd/redigo/redis"
 )
@@ -148,7 +146,7 @@ func TestSaveUserSession(t *testing.T) {
 
 	tests := []struct {
 		input         *user.Session
-		expectedErr   *sessionerrs.Custom
+		expectedErr   error
 		expectToExist bool
 	}{
 		{validUserSessionForSaving, nil, true},
@@ -163,11 +161,7 @@ func TestSaveUserSession(t *testing.T) {
 		var assertExist bool
 
 		e := service.SaveUserSession(tt.input)
-		if e == nil {
-			assertErr = e == tt.expectedErr
-		} else {
-			reflect.DeepEqual(*e, *tt.expectedErr)
-		}
+		assertErr = e == tt.expectedErr
 
 		exists, err := redis.Bool(c.Do("EXISTS", tt.input.ID))
 		if err != nil {
@@ -191,12 +185,12 @@ func TestFetchValidUserSession(t *testing.T) {
 	tests := []struct {
 		input               string
 		expectedUserSession *user.Session
-		expectedErr         *sessionerrs.Custom
+		expectedErr         error
 	}{
 		{validUserSession.ID, validUserSession, nil},
 		{validUserSessionForSaving.ID, validUserSessionForSaving, nil},
-		{expiredUserSession.ID, nil, &sessionerrs.Custom{Code: 401, Err: errors.New("session is expired or sessionID doesn't exist")}},
-		{inValidUserSession.ID, nil, &sessionerrs.Custom{Code: 500, Err: errors.New("error retrieving session data from store")}},
+		{expiredUserSession.ID, nil, nil},
+		{inValidUserSession.ID, nil, ErrRetrievingSession},
 	}
 
 	for idx, tt := range tests {
@@ -204,13 +198,7 @@ func TestFetchValidUserSession(t *testing.T) {
 		var assertUserSession bool
 
 		a, e := service.FetchValidUserSession(tt.input)
-		if e == nil {
-			assertErr = e == tt.expectedErr
-		} else {
-			if tt.expectedErr != nil {
-				assertErr = reflect.DeepEqual(*e, *tt.expectedErr)
-			}
-		}
+		assertErr = e == tt.expectedErr
 		if a == nil {
 			assertUserSession = a == tt.expectedUserSession
 		} else {

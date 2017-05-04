@@ -3,13 +3,11 @@
 package transport
 
 import (
-	"errors"
 	"net/http"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/adam-hanna/sessions/sessionerrs"
 	"github.com/adam-hanna/sessions/user"
 )
 
@@ -135,10 +133,10 @@ func TestFetchSessionIDFromRequest(t *testing.T) {
 	var tests = []struct {
 		input          http.Cookie
 		expectedString string
-		expectedErr    sessionerrs.Custom
+		expectedErr    error
 	}{
-		{http.Cookie{Name: testService.options.CookieName, Value: "testValue"}, "testValue", sessionerrs.Custom{}},
-		{http.Cookie{Name: "badName"}, "", sessionerrs.Custom{Code: 401, Err: errors.New("no session on request")}},
+		{http.Cookie{Name: testService.options.CookieName, Value: "testValue"}, "testValue", nil},
+		{http.Cookie{Name: "badName"}, "", ErrNoSessionOnRequest},
 	}
 
 	for idx, tt := range tests {
@@ -147,12 +145,7 @@ func TestFetchSessionIDFromRequest(t *testing.T) {
 		r.AddCookie(&tt.input)
 
 		s, e := testService.FetchSessionIDFromRequest(&r)
-		assert := true
-		if e != nil {
-			assert = tt.expectedErr.Err.Error() == e.Err.Error()
-		} else {
-			e = &sessionerrs.Custom{}
-		}
+		assert := tt.expectedErr == e
 
 		if !assert || tt.expectedString != s {
 			t.Errorf("test #%d failed; assert: %t, expectedErr: %v, err: %v, expectedString: %s, string: %s", idx+1, assert, tt.expectedErr, e, tt.expectedString, s)

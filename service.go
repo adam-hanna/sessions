@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/adam-hanna/sessions/auth"
-	"github.com/adam-hanna/sessions/sessionerrs"
 	"github.com/adam-hanna/sessions/store"
 	"github.com/adam-hanna/sessions/transport"
 	"github.com/adam-hanna/sessions/user"
@@ -44,7 +43,7 @@ func New(store store.ServiceInterface, auth auth.ServiceInterface, transport tra
 // and writes the session on the http.ResponseWriter.
 //
 // This method should be called when a user logs in, for example.
-func (s *Service) IssueUserSession(userID string, json string, w http.ResponseWriter) (*user.Session, *sessionerrs.Custom) {
+func (s *Service) IssueUserSession(userID string, json string, w http.ResponseWriter) (*user.Session, error) {
 	userSession := user.New(userID, json, s.options.ExpirationDuration)
 
 	// sign the session id
@@ -66,7 +65,7 @@ func (s *Service) IssueUserSession(userID string, json string, w http.ResponseWr
 // ClearUserSession is used to remove the user session from the store and clear the cookies on the ResponseWriter.
 //
 // This method should be called when a user logs out, for example.
-func (s *Service) ClearUserSession(userSession *user.Session, w http.ResponseWriter) *sessionerrs.Custom {
+func (s *Service) ClearUserSession(userSession *user.Session, w http.ResponseWriter) error {
 	// delete the session from the store
 	err := s.store.DeleteUserSession(userSession.ID)
 	if err != nil {
@@ -79,16 +78,25 @@ func (s *Service) ClearUserSession(userSession *user.Session, w http.ResponseWri
 
 // GetUserSession returns a user session from a request. This method only returns valid sessions. Therefore, \
 // sessions that have expired, or that fail signature verification will return a custom session error with code 401
-func (s *Service) GetUserSession(r *http.Request) (*user.Session, *sessionerrs.Custom) {
+func (s *Service) GetUserSession(r *http.Request) (*user.Session, error) {
 	// read the session from the request
 	signedSessionID, err := s.transport.FetchSessionIDFromRequest(r)
 	if err != nil {
+		if err == transport.ErrNoSessionOnRequest {
+			// note a nil user.Session pointer indicates a 401 unauthorized
+			return nil, nil
+		}
+
 		return nil, err
 	}
 
 	// decode the signedSessionID
 	sessionID, err := s.auth.VerifyAndDecode(signedSessionID)
 	if err != nil {
+		if err == auth.ErrInvalidSession {
+			return nil, nil
+		}
+
 		return nil, err
 	}
 
@@ -99,7 +107,7 @@ func (s *Service) GetUserSession(r *http.Request) (*user.Session, *sessionerrs.C
 // ExtendUserSession extends the ExpiresAt of a session by the Options.ExpirationDuration
 //
 // Note that this function must be called, manually! Extension of user session expiry's does not happen automatically!
-func (s *Service) ExtendUserSession(userSession *user.Session, r *http.Request, w http.ResponseWriter) *sessionerrs.Custom {
+func (s *Service) ExtendUserSession(userSession *user.Session, r *http.Request, w http.ResponseWriter) error {
 	newExpiresAt := time.Now().Add(s.options.ExpirationDuration).UTC()
 
 	// update the provided user session
