@@ -26,48 +26,45 @@ type ServiceInterface interface {
 
 ## Quickstart
 ~~~go
-package main
+// issue a new session and write the session to the ResponseWriter
+userSession, err := sesh.IssueUserSession("fakeUserID", "", w)
+if err != nil {
+	log.Printf("Err issuing user session: %v\n", err)
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	return
+}
 
-import (
-    ...
-)
+...
 
-var sesh *sessions.Service
+// Fetch a pointer to a valid user session from a request. A nil pointer indicates no or invalid session
+userSession, err := sesh.GetUserSession(r)
+if err != nil {
+	log.Printf("Err fetching user session: %v\n", err)
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	return
+}
+// nil session pointers indicate a 401 unauthorized
+if session == nil {
+	http.Error(w, "Unathorized", http.StatusUnauthorized)
+	return
+}
 
-var issueSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	userSession, err := sesh.IssueUserSession("fakeUserID", "", w)
-	if err != nil {
-		log.Printf("Err issuing user session: %v\n", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	log.Printf("In issue; user's session: %v\n", userSession)
+...
 
-	w.WriteHeader(http.StatusOK)
-})
+// Extend session expiry. Note that session expiry's need to be manually extended
+if err := sesh.ExtendUserSession(userSession, r, w); err != nil {
+	log.Printf("Err extending user session: %v\n", err)
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	return
+}
 
-func main() {
-	seshStore := store.New(store.Options{})
+...
 
-	// e.g. `$ openssl rand -base64 64`
-	seshAuth, err := auth.New(auth.Options{
-		Key: []byte("DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="),
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	seshTransport := transport.New(transport.Options{
-		HTTPOnly: true,
-		Secure:   false, // note: can't use secure cookies in development!
-	})
-
-	sesh = sessions.New(seshStore, seshAuth, seshTransport, sessions.Options{})
-
-	http.HandleFunc("/issue", issueSession)
-
-	log.Println("Listening on localhost:8080")
-	log.Fatal(http.ListenAndServe("127.0.0.1:8080", nil))
+// Invalidate a user session, deleting it from redis and expiring the cookie on the ResponseWriter
+if err := sesh.ClearUserSession(userSession, w); err != nil {
+	log.Printf("Err clearing user session: %v\n", err)
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	return
 }
 ~~~
 
@@ -281,8 +278,7 @@ var requiresSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 	}
 
 	// note that session expiry's need to be manually extended
-	err = sesh.ExtendUserSession(userSession, r, w)
-	if err != nil {
+	if err = sesh.ExtendUserSession(userSession, r, w); err != nil {
 		log.Printf("Err extending user session: %v\n", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -334,8 +330,7 @@ var clearSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err = sesh.ClearUserSession(userSession, w)
-	if err != nil {
+	if err = sesh.ClearUserSession(userSession, w); err != nil {
 		log.Printf("Err clearing user session: %v\n", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -360,11 +355,9 @@ func main() {
 	seshStore := store.New(store.Options{})
 
 	// e.g. `$ openssl rand -base64 64`
-	authKey := "DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="
-	authOptions := auth.Options{
-		Key: []byte(authKey),
-	}
-	seshAuth, err := auth.New(authOptions)
+	seshAuth, err := auth.New(auth.Options{
+		Key: []byte("DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="),
+	})
 	if err != nil {
 		log.Fatal(err)
 	}

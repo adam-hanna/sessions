@@ -53,8 +53,7 @@ func (s *Service) IssueUserSession(userID string, json string, w http.ResponseWr
 	}
 
 	// save the session in the store
-	err = s.store.SaveUserSession(userSession)
-	if err != nil {
+	if err = s.store.SaveUserSession(userSession); err != nil {
 		return nil, err
 	}
 
@@ -67,8 +66,7 @@ func (s *Service) IssueUserSession(userID string, json string, w http.ResponseWr
 // This method should be called when a user logs out, for example.
 func (s *Service) ClearUserSession(userSession *user.Session, w http.ResponseWriter) error {
 	// delete the session from the store
-	err := s.store.DeleteUserSession(userSession.ID)
-	if err != nil {
+	if err := s.store.DeleteUserSession(userSession.ID); err != nil {
 		return err
 	}
 
@@ -114,8 +112,7 @@ func (s *Service) ExtendUserSession(userSession *user.Session, r *http.Request, 
 	userSession.ExpiresAt = newExpiresAt
 
 	// save the session in the store with the extended expiry
-	err := s.store.SaveUserSession(userSession)
-	if err != nil {
+	if err := s.store.SaveUserSession(userSession); err != nil {
 		return err
 	}
 
