@@ -76,9 +76,8 @@ func setup() error {
 	seshStore = store.New(store.Options{})
 
 	// e.g. `$ openssl rand -base64 64`
-	authKey := "DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="
 	seshAuth, err := auth.New(auth.Options{
-		Key: []byte(authKey),
+		Key: []byte("DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="),
 	})
 	if err != nil {
 		return err

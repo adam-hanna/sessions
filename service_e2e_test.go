@@ -187,8 +187,7 @@ var (
 			return
 		}
 
-		err = sesh.ClearUserSession(userSession, w)
-		if err != nil {
+		if err = sesh.ClearUserSession(userSession, w); err != nil {
 			if testing.Verbose() {
 				log.Printf("Err clearing user session: %v\n", err)
 			}
@@ -239,15 +238,13 @@ func generateKey() (string, error) {
 }
 
 func TestMain(m *testing.M) {
-	err := setup()
-	if err != nil {
+	if err := setup(); err != nil {
 		log.Fatal("Err setting up e2e tests", err)
 	}
 
 	code := m.Run()
 
-	err = shutdown()
-	if err != nil {
+	if err := shutdown(); err != nil {
 		log.Fatal("Err shutting down e2e tests", err)
 	}
 
@@ -261,9 +258,8 @@ func setup() error {
 	seshStore = store.New(store.Options{})
 
 	// e.g. `$ openssl rand -base64 64`
-	authKey := "DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="
 	seshAuth, err := auth.New(auth.Options{
-		Key: []byte(authKey),
+		Key: []byte("DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="),
 	})
 	if err != nil {
 		return err
@@ -282,8 +278,7 @@ func setup() error {
 	c := seshStore.Pool.Get()
 	defer c.Close()
 
-	_, err = c.Do("PING")
-	if err != nil {
+	if _, err = c.Do("PING"); err != nil {
 		return err
 	}
 
@@ -299,8 +294,7 @@ func shutdown() error {
 	aLongTimeAgo := time.Now().Add(-1000 * time.Hour)
 
 	for idx := range issuedSessionIDs {
-		_, err := c.Do("EXPIREAT", issuedSessionIDs[idx], aLongTimeAgo.Unix())
-		if err != nil {
+		if _, err := c.Do("EXPIREAT", issuedSessionIDs[idx], aLongTimeAgo.Unix()); err != nil {
 			return errors.New("Could not delete issued session id. Error: " + err.Error())
 		}
 	}
