@@ -7,11 +7,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"reflect"
 	"testing"
 	"time"
 
-	"github.com/adam-hanna/sessions/sessionerrs"
 	"github.com/adam-hanna/sessions/user"
 	"github.com/garyburd/redigo/redis"
 )
@@ -46,15 +44,13 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	err := setup()
-	if err != nil {
+	if err := setup(); err != nil {
 		log.Fatal("Err setting up integration tests")
 	}
 
 	code := m.Run()
 
-	err = shutdown()
-	if err != nil {
+	if err := shutdown(); err != nil {
 		log.Fatal("Err shutting down integration tests")
 	}
 
@@ -72,33 +68,27 @@ func setup() error {
 	defer c.Close()
 
 	// VALID USER
-	_, err := c.Do("HMSET", validUserSession.ID, "UserID", validUserSession.UserID, "JSON", validUserSession.JSON, "ExpiresAtSeconds", validUserSession.ExpiresAt.Unix())
-	if err != nil {
+	if _, err := c.Do("HMSET", validUserSession.ID, "UserID", validUserSession.UserID, "JSON", validUserSession.JSON, "ExpiresAtSeconds", validUserSession.ExpiresAt.Unix()); err != nil {
 		return errors.New("Could not set valid user")
 	}
-	_, err = c.Do("EXPIREAT", validUserSession.ID, validUserSession.ExpiresAt.Unix())
-	if err != nil {
+	if _, err := c.Do("EXPIREAT", validUserSession.ID, validUserSession.ExpiresAt.Unix()); err != nil {
 		return errors.New("Could not set expiry for valid user")
 	}
 
 	// INVALID USER
 	// note: the invalid user doesn't have JSON!
-	_, err = c.Do("HMSET", inValidUserSession.ID, "UserID", inValidUserSession.UserID, "ExpiresAtSeconds", inValidUserSession.ExpiresAt.Unix())
-	if err != nil {
+	if _, err := c.Do("HMSET", inValidUserSession.ID, "UserID", inValidUserSession.UserID, "ExpiresAtSeconds", inValidUserSession.ExpiresAt.Unix()); err != nil {
 		return errors.New("Could not set valid user")
 	}
-	_, err = c.Do("EXPIREAT", inValidUserSession.ID, inValidUserSession.ExpiresAt.Unix())
-	if err != nil {
+	if _, err := c.Do("EXPIREAT", inValidUserSession.ID, inValidUserSession.ExpiresAt.Unix()); err != nil {
 		return errors.New("Could not set expiry for valid user")
 	}
 
 	// EXPIRED USER
-	_, err = c.Do("HMSET", expiredUserSession.ID, "UserID", expiredUserSession.UserID, "JSON", expiredUserSession.JSON, "ExpiresAtSeconds", expiredUserSession.ExpiresAt.Unix())
-	if err != nil {
+	if _, err := c.Do("HMSET", expiredUserSession.ID, "UserID", expiredUserSession.UserID, "JSON", expiredUserSession.JSON, "ExpiresAtSeconds", expiredUserSession.ExpiresAt.Unix()); err != nil {
 		return errors.New("Could not set valid user")
 	}
-	_, err = c.Do("EXPIREAT", expiredUserSession.ID, expiredUserSession.ExpiresAt.Unix())
-	if err != nil {
+	if _, err := c.Do("EXPIREAT", expiredUserSession.ID, expiredUserSession.ExpiresAt.Unix()); err != nil {
 		return errors.New("Could not set expiry for valid user")
 	}
 
@@ -114,26 +104,22 @@ func shutdown() error {
 	aLongTimeAgo := time.Now().Add(-1000 * time.Hour)
 
 	// VALID USER
-	_, err := c.Do("EXPIREAT", validUserSession.ID, aLongTimeAgo.Unix())
-	if err != nil {
+	if _, err := c.Do("EXPIREAT", validUserSession.ID, aLongTimeAgo.Unix()); err != nil {
 		return errors.New("Could not set EXPIREAT for validUserSession")
 	}
 
 	// VALID USER
-	_, err = c.Do("EXPIREAT", validUserSessionForSaving.ID, aLongTimeAgo.Unix())
-	if err != nil {
+	if _, err := c.Do("EXPIREAT", validUserSessionForSaving.ID, aLongTimeAgo.Unix()); err != nil {
 		return errors.New("Could not set EXPIREAT for validUserSessionForSaving")
 	}
 
 	// INVALID USER
-	_, err = c.Do("EXPIREAT", inValidUserSession.ID, aLongTimeAgo.Unix())
-	if err != nil {
+	if _, err := c.Do("EXPIREAT", inValidUserSession.ID, aLongTimeAgo.Unix()); err != nil {
 		return errors.New("Could not set EXPIREAT for invaludUserSession")
 	}
 
 	// EXPIRED USER
-	_, err = c.Do("EXPIREAT", expiredUserSession.ID, aLongTimeAgo.Unix())
-	if err != nil {
+	if _, err := c.Do("EXPIREAT", expiredUserSession.ID, aLongTimeAgo.Unix()); err != nil {
 		return errors.New("Could not set EXPIREAT for expiredUserSession")
 	}
 
@@ -148,7 +134,7 @@ func TestSaveUserSession(t *testing.T) {
 
 	tests := []struct {
 		input         *user.Session
-		expectedErr   *sessionerrs.Custom
+		expectedErr   error
 		expectToExist bool
 	}{
 		{validUserSessionForSaving, nil, true},
@@ -163,11 +149,7 @@ func TestSaveUserSession(t *testing.T) {
 		var assertExist bool
 
 		e := service.SaveUserSession(tt.input)
-		if e == nil {
-			assertErr = e == tt.expectedErr
-		} else {
-			reflect.DeepEqual(*e, *tt.expectedErr)
-		}
+		assertErr = e == tt.expectedErr
 
 		exists, err := redis.Bool(c.Do("EXISTS", tt.input.ID))
 		if err != nil {
@@ -191,12 +173,12 @@ func TestFetchValidUserSession(t *testing.T) {
 	tests := []struct {
 		input               string
 		expectedUserSession *user.Session
-		expectedErr         *sessionerrs.Custom
+		expectedErr         error
 	}{
 		{validUserSession.ID, validUserSession, nil},
 		{validUserSessionForSaving.ID, validUserSessionForSaving, nil},
-		{expiredUserSession.ID, nil, &sessionerrs.Custom{Code: 401, Err: errors.New("session is expired or sessionID doesn't exist")}},
-		{inValidUserSession.ID, nil, &sessionerrs.Custom{Code: 500, Err: errors.New("error retrieving session data from store")}},
+		{expiredUserSession.ID, nil, nil},
+		{inValidUserSession.ID, nil, ErrRetrievingSession},
 	}
 
 	for idx, tt := range tests {
@@ -204,13 +186,7 @@ func TestFetchValidUserSession(t *testing.T) {
 		var assertUserSession bool
 
 		a, e := service.FetchValidUserSession(tt.input)
-		if e == nil {
-			assertErr = e == tt.expectedErr
-		} else {
-			if tt.expectedErr != nil {
-				assertErr = reflect.DeepEqual(*e, *tt.expectedErr)
-			}
-		}
+		assertErr = e == tt.expectedErr
 		if a == nil {
 			assertUserSession = a == tt.expectedUserSession
 		} else {

@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/adam-hanna/sessions/sessionerrs"
 	"github.com/adam-hanna/sessions/user"
 )
 
@@ -19,6 +18,9 @@ const (
 	// DefaultSecureCookie is the default Secure option of the cookie
 	// DefaultSecureCookie = true // changing this to false, the uninitialized val, for now
 )
+
+// ErrNoSessionOnRequest is thrown when a session is not found on a request
+var ErrNoSessionOnRequest = errors.New("no session on request")
 
 // Service writes sessions on responseWriters and reads sessions from requests
 type Service struct {
@@ -42,7 +44,7 @@ func New(options Options) *Service {
 }
 
 // SetSessionOnResponse sets a signed session id and a user session on a responseWriter
-func (s *Service) SetSessionOnResponse(signedSessionID string, userSession *user.Session, w http.ResponseWriter) *sessionerrs.Custom {
+func (s *Service) SetSessionOnResponse(signedSessionID string, userSession *user.Session, w http.ResponseWriter) error {
 	sessionCookie := http.Cookie{
 		Name:     s.options.CookieName,
 		Value:    signedSessionID,
@@ -57,7 +59,7 @@ func (s *Service) SetSessionOnResponse(signedSessionID string, userSession *user
 }
 
 // DeleteSessionFromResponse deletes a user session from a responseWriter
-func (s *Service) DeleteSessionFromResponse(w http.ResponseWriter) *sessionerrs.Custom {
+func (s *Service) DeleteSessionFromResponse(w http.ResponseWriter) error {
 	aLongTimeAgo := time.Now().Add(-1000 * time.Hour)
 	nullSessionCookie := http.Cookie{
 		Name:     s.options.CookieName,
@@ -73,19 +75,13 @@ func (s *Service) DeleteSessionFromResponse(w http.ResponseWriter) *sessionerrs.
 }
 
 // FetchSessionIDFromRequest retrieves a signed session id from a request
-func (s *Service) FetchSessionIDFromRequest(r *http.Request) (string, *sessionerrs.Custom) {
+func (s *Service) FetchSessionIDFromRequest(r *http.Request) (string, error) {
 	sessionCookie, err := r.Cookie(s.options.CookieName)
 	if err != nil {
 		if err == http.ErrNoCookie {
-			return "", &sessionerrs.Custom{
-				Code: 401,
-				Err:  errors.New("no session on request"),
-			}
+			return "", ErrNoSessionOnRequest
 		}
-		return "", &sessionerrs.Custom{
-			Code: 500,
-			Err:  err,
-		}
+		return "", err
 	}
 
 	return sessionCookie.Value, nil

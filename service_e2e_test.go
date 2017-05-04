@@ -54,12 +54,12 @@ var (
 			return
 		}
 
-		userSession, seshErr := sesh.IssueUserSession("fakeUserID", string(JSONBytes[:]), w)
-		if seshErr != nil {
+		userSession, err := sesh.IssueUserSession("fakeUserID", string(JSONBytes[:]), w)
+		if err != nil {
 			if testing.Verbose() {
-				log.Printf("Err issuing user session: %v\n", seshErr)
+				log.Printf("Err issuing user session: %v\n", err)
 			}
-			http.Error(w, seshErr.Err.Error(), seshErr.Code)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
 		if testing.Verbose() {
@@ -84,12 +84,16 @@ var (
 	})
 
 	requiresSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userSession, seshErr := sesh.GetUserSession(r)
-		if seshErr != nil {
+		userSession, err := sesh.GetUserSession(r)
+		if err != nil {
 			if testing.Verbose() {
-				log.Printf("Err fetching user session: %v\n", seshErr)
+				log.Printf("Err fetching user session: %v\n", err)
 			}
-			http.Error(w, seshErr.Err.Error(), seshErr.Code)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		if userSession == nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		if testing.Verbose() {
@@ -119,12 +123,11 @@ var (
 		}
 
 		// note that session expiry's need to be manually extended
-		seshErr = sesh.ExtendUserSession(userSession, r, w)
-		if seshErr != nil {
+		if err = sesh.ExtendUserSession(userSession, r, w); err != nil {
 			if testing.Verbose() {
-				log.Printf("Err fetching user session: %v\n", seshErr)
+				log.Printf("Err fetching user session: %v\n", err)
 			}
-			http.Error(w, seshErr.Err.Error(), seshErr.Code)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
 		if testing.Verbose() {
@@ -151,7 +154,11 @@ var (
 			if testing.Verbose() {
 				log.Printf("Err fetching user session: %v\n", err)
 			}
-			http.Error(w, err.Err.Error(), err.Code)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		if userSession == nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		if testing.Verbose() {
@@ -163,7 +170,7 @@ var (
 			if testing.Verbose() {
 				log.Printf("Err issuing unmarshalling json: %v\n", err)
 			}
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
 		if testing.Verbose() {
@@ -180,12 +187,11 @@ var (
 			return
 		}
 
-		err = sesh.ClearUserSession(userSession, w)
-		if err != nil {
+		if err = sesh.ClearUserSession(userSession, w); err != nil {
 			if testing.Verbose() {
 				log.Printf("Err clearing user session: %v\n", err)
 			}
-			http.Error(w, err.Err.Error(), err.Code)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
 
@@ -232,15 +238,13 @@ func generateKey() (string, error) {
 }
 
 func TestMain(m *testing.M) {
-	err := setup()
-	if err != nil {
+	if err := setup(); err != nil {
 		log.Fatal("Err setting up e2e tests", err)
 	}
 
 	code := m.Run()
 
-	err = shutdown()
-	if err != nil {
+	if err := shutdown(); err != nil {
 		log.Fatal("Err shutting down e2e tests", err)
 	}
 
@@ -254,19 +258,16 @@ func setup() error {
 	seshStore = store.New(store.Options{})
 
 	// e.g. `$ openssl rand -base64 64`
-	authKey := "DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="
-	authOptions := auth.Options{
-		Key: []byte(authKey),
-	}
-	seshAuth, customErr := auth.New(authOptions)
-	if customErr != nil {
-		return customErr.Err
+	seshAuth, err := auth.New(auth.Options{
+		Key: []byte("DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="),
+	})
+	if err != nil {
+		return err
 	}
 
-	transportOptions := transport.Options{
+	seshTransport := transport.New(transport.Options{
 		Secure: false, // note: can't use secure cookies in development!
-	}
-	seshTransport := transport.New(transportOptions)
+	})
 
 	seshOptions := Options{
 		ExpirationDuration: 5 * time.Second,
@@ -277,8 +278,7 @@ func setup() error {
 	c := seshStore.Pool.Get()
 	defer c.Close()
 
-	_, err := c.Do("PING")
-	if err != nil {
+	if _, err = c.Do("PING"); err != nil {
 		return err
 	}
 
@@ -294,8 +294,7 @@ func shutdown() error {
 	aLongTimeAgo := time.Now().Add(-1000 * time.Hour)
 
 	for idx := range issuedSessionIDs {
-		_, err := c.Do("EXPIREAT", issuedSessionIDs[idx], aLongTimeAgo.Unix())
-		if err != nil {
+		if _, err := c.Do("EXPIREAT", issuedSessionIDs[idx], aLongTimeAgo.Unix()); err != nil {
 			return errors.New("Could not delete issued session id. Error: " + err.Error())
 		}
 	}

@@ -22,12 +22,12 @@ var (
 	seshStore *store.Service
 
 	issueSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userSession, seshErr := sesh.IssueUserSession("fakeUserID", "", w)
-		if seshErr != nil {
+		userSession, err := sesh.IssueUserSession("fakeUserID", "", w)
+		if err != nil {
 			if testing.Verbose() {
-				log.Printf("Err issuing user session: %v\n", seshErr)
+				log.Printf("Err issuing user session: %v\n", err)
 			}
-			http.Error(w, seshErr.Err.Error(), seshErr.Code)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
 
@@ -38,12 +38,16 @@ var (
 	})
 
 	requiresSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, seshErr := sesh.GetUserSession(r)
-		if seshErr != nil {
+		session, err := sesh.GetUserSession(r)
+		if err != nil {
 			if testing.Verbose() {
-				log.Printf("Err fetching user session: %v\n", seshErr)
+				log.Printf("Err fetching user session: %v\n", err)
 			}
-			http.Error(w, seshErr.Err.Error(), seshErr.Code)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		if session == nil {
+			http.Error(w, "Unathorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -52,15 +56,13 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	err := setup()
-	if err != nil {
+	if err := setup(); err != nil {
 		log.Fatal("Err setting up benchmark tests", err)
 	}
 
 	code := m.Run()
 
-	err = shutdown()
-	if err != nil {
+	if err := shutdown(); err != nil {
 		log.Fatal("Err shutting down benchmark tests", err)
 	}
 
@@ -74,19 +76,16 @@ func setup() error {
 	seshStore = store.New(store.Options{})
 
 	// e.g. `$ openssl rand -base64 64`
-	authKey := "DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="
-	authOptions := auth.Options{
-		Key: []byte(authKey),
-	}
-	seshAuth, customErr := auth.New(authOptions)
-	if customErr != nil {
-		return customErr.Err
+	seshAuth, err := auth.New(auth.Options{
+		Key: []byte("DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="),
+	})
+	if err != nil {
+		return err
 	}
 
-	transportOptions := transport.Options{
+	seshTransport := transport.New(transport.Options{
 		Secure: false, // note: can't use secure cookies in development!
-	}
-	seshTransport := transport.New(transportOptions)
+	})
 
 	seshOptions := sessions.Options{
 		ExpirationDuration: 3 * 24 * time.Hour,
@@ -97,8 +96,7 @@ func setup() error {
 	c := seshStore.Pool.Get()
 	defer c.Close()
 
-	_, err := c.Do("PING")
-	if err != nil {
+	if _, err := c.Do("PING"); err != nil {
 		return err
 	}
 
@@ -114,8 +112,7 @@ func shutdown() error {
 	aLongTimeAgo := time.Now().Add(-1000 * time.Hour)
 
 	for idx := range issuedSessionIDs {
-		_, err := c.Do("EXPIREAT", issuedSessionIDs[idx], aLongTimeAgo.Unix())
-		if err != nil {
+		if _, err := c.Do("EXPIREAT", issuedSessionIDs[idx], aLongTimeAgo.Unix()); err != nil {
 			return errors.New("Could not delete issued session id. Error: " + err.Error())
 		}
 	}

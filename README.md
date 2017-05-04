@@ -8,9 +8,9 @@ By default, the service stores sessions in redis, and transports sessions to cli
 ~~~go
 // ServiceInterface defines the behavior of the session store
 type ServiceInterface interface {
-	SaveUserSession(userSession *user.Session) *sessionerrs.Custom
-	DeleteUserSession(sessionID string) *sessionerrs.Custom
-	FetchValidUserSession(sessionID string) (*user.Session, *sessionerrs.Custom)
+	SaveUserSession(userSession *user.Session) error
+	DeleteUserSession(sessionID string) error
+	FetchValidUserSession(sessionID string) (*user.Session, error)
 }
 ~~~
 
@@ -26,52 +26,47 @@ type ServiceInterface interface {
 
 ## Quickstart
 ~~~go
-package main
-
-import (
-    ...
-)
-
 var sesh *sessions.Service
 
-var issueSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	userSession, seshErr := sesh.IssueUserSession("fakeUserID", "", w)
-	if seshErr != nil {
-		log.Printf("Err issuing user session: %v\n", seshErr)
-		http.Error(w, seshErr.Err.Error(), seshErr.Code) // seshErr is a custom err with an http code
-		return
-	}
-	log.Printf("In issue; user's session: %v\n", userSession)
+// issue a new session and write the session to the ResponseWriter
+userSession, err := sesh.IssueUserSession("fakeUserID", "{\"foo\":\"bar\"}", w)
+if err != nil {
+	log.Printf("Err issuing user session: %v\n", err)
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	return
+}
 
-	w.WriteHeader(http.StatusOK)
-})
+...
 
-func main() {
-	seshStore := store.New(store.Options{})
+// Fetch a pointer to a valid user session from a request. A nil pointer indicates no or invalid session
+userSession, err := sesh.GetUserSession(r)
+if err != nil {
+	log.Printf("Err fetching user session: %v\n", err)
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	return
+}
+// nil session pointers indicate a 401 unauthorized
+if userSession == nil {
+	http.Error(w, "Unathorized", http.StatusUnauthorized)
+	return
+}
 
-	// e.g. `$ openssl rand -base64 64`
-	authKey := "DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="
-	authOptions := auth.Options{
-		Key: []byte(authKey),
-	}
-	seshAuth, err := auth.New(authOptions)
-	if err != nil {
-		log.Fatal(err)
-	}
+...
 
-	transportOptions := transport.Options{
-		HTTPOnly: true,
-		Secure:   false, // note: can't use secure cookies in development!
-	}
-	seshTransport := transport.New(transportOptions)
+// Extend session expiry. Note that session expiry's need to be manually extended
+if err := sesh.ExtendUserSession(userSession, r, w); err != nil {
+	log.Printf("Err extending user session: %v\n", err)
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	return
+}
 
-	seshOptions := sessions.Options{}
-	sesh = sessions.New(seshStore, seshAuth, seshTransport, seshOptions)
+...
 
-	http.HandleFunc("/issue", issueSession)
-
-	log.Println("Listening on localhost:8080")
-	log.Fatal(http.ListenAndServe("127.0.0.1:8080", nil))
+// Invalidate a user session, deleting it from redis and expiring the cookie on the ResponseWriter
+if err := sesh.ClearUserSession(userSession, w); err != nil {
+	log.Printf("Err clearing user session: %v\n", err)
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	return
 }
 ~~~
 
@@ -97,7 +92,7 @@ The general flow of the session service is as follows:
 
 1. Create [store](https://godoc.org/github.com/adam-hanna/sessions/store), [auth](https://godoc.org/github.com/adam-hanna/sessions/auth) and [transport](https://godoc.org/github.com/adam-hanna/sessions/transport) services by calling their respective `New(...)` functions (or create your own custom services that implement the service's interface methods). Then pass these services to the `sessions.New(...)` constructor.
 2. After a user logs in, call the `sessions.IssueUserSession(...)` function. This function first creates a new `user.Session`. SessionIDs are [RFC 4122 version 4 uuids](https://github.com/pborman/uuid). Next, the service hashes the sessionID with the provided key. The hashing algorithm is SHA-512, and therefore [the key used should be between 64 and 128 bytes](https://tools.ietf.org/html/rfc2104#section-3). Then, the service stores the session in redis and finally writes the hashed sessionID to the response writer in a cookie. Sessions written to the redis db utilize `EXPIREAT` to automatically destory expired sessions.
-3. To check if a valid session was included in a request, use the `sessions.GetUserSession(...)` function. This function grabs the hashed sessionID from the session cookie, verifies the HMAC signature and finally looks up the session in the redis db. If the session is expired, or fails HMAC signature verification, this function will return an error with code 401. If the session is valid, and you'd like to extend the session's expiry, you can then call `session.ExtendUserSession(...)`. Session expiry's are never automatically extended, only through calling this function will the session's expiry be extended.
+3. To check if a valid session was included in a request, use the `sessions.GetUserSession(...)` function. This function grabs the hashed sessionID from the session cookie, verifies the HMAC signature and finally looks up the session in the redis db. If the session is expired, or fails HMAC signature verification, this function will return a nil pointer to a user session. If the session is valid, and you'd like to extend the session's expiry, you can then call `session.ExtendUserSession(...)`. Session expiry's are never automatically extended, only through calling this function will the session's expiry be extended.
 4. When a user logs out, call the `sessions.ClearUserSession(...)` function. This function destroys the session in the db and also destroys the cookie on the ResponseWriter.
 
 ## API
@@ -114,7 +109,7 @@ Session is the struct that is used to store session data. The JSON field allows 
 
 ### [IssueUserSession](https://godoc.org/github.com/adam-hanna/sessions#IssueUserSession)
 ~~~ go
-func (s *Service) IssueUserSession(userID string, json string, w http.ResponseWriter) (*user.Session, *sessionerrs.Custom)
+func (s *Service) IssueUserSession(userID string, json string, w http.ResponseWriter) (*user.Session, error)
 ~~~
 IssueUserSession grants a new user session, writes that session info to the store and writes the session on the http.ResponseWriter.
 
@@ -122,7 +117,7 @@ This method should be called when a user logs in, for example.
 
 ### [ClearUserSession](https://godoc.org/github.com/adam-hanna/sessions#ClearUserSession)
 ~~~go
-func (s *Service) ClearUserSession(userSession *user.Session, w http.ResponseWriter) *sessionerrs.Custom
+func (s *Service) ClearUserSession(userSession *user.Session, w http.ResponseWriter) error
 ~~~
 ClearUserSession is used to remove the user session from the store and clear the cookies on the ResponseWriter.
 
@@ -130,42 +125,21 @@ This method should be called when a user logs out, for example.
 
 ### [GetUserSession](https://godoc.org/github.com/adam-hanna/sessions#GetUserSession)
 ~~~go
-func (s *Service) GetUserSession(r *http.Request) (*user.Session, *sessionerrs.Custom)
+func (s *Service) GetUserSession(r *http.Request) (*user.Session, error)
 ~~~
-GetUserSession returns a user session from the hashed sessionID included in the request. This method only returns valid sessions. Therefore, sessions that have expired, or that fail signature verification will return a custom session error with code 401.
+GetUserSession returns a user session from the hashed sessionID included in the request. This method only returns valid sessions. Therefore, sessions that have expired or that fail signature verification will return a nil pointer.
 
 ### [ExtendUserSession](https://godoc.org/github.com/adam-hanna/sessions#ExtendUserSession)
 ~~~go
-func (s *Service) ExtendUserSession(userSession *user.Session, r *http.Request, w http.ResponseWriter) *sessionerrs.Custom
+func (s *Service) ExtendUserSession(userSession *user.Session, r *http.Request, w http.ResponseWriter) error
 ~~~
 ExtendUserSession extends the ExpiresAt of a session by the Options.ExpirationDuration
 
 Note that this function must be called, manually! Extension of user session expiry's does not happen automatically!
 
-### [sessionerrs.Custom](https://godoc.org/github.com/adam-hanna/sessions/sessionerrs#Custom)
-~~~go
-type Custom struct {
-    // Code corresponds to an http status code (e.g. 401 Unauthorized, or 500 Internal Server Error)
-    Code int
-    // Err is the actual error thrown
-    Err error
-}
-~~~
-Custom is the error type returned by this session service package. This custom error is useful for calling funcs to determine which http status code to return to clients on err. For example:
-
-~~~go
-userSession, seshErr := sesh.IssueUserSession("fakeUserID", "", w)
-if seshErr != nil {
-	log.Printf("Err issuing user session: %v\n", seshErr)
-	http.Error(w, seshErr.Err.Error(), seshErr.Code) // seshErr is a custom err with an http code
-	return
-}
-~~~
-
-## Test Coverage
+## Testing Coverage
 ~~~bash
 ok      github.com/adam-hanna/sessions			9.012s  coverage: 94.1% of statements
-?       github.com/adam-hanna/sessions/sessionerrs	[no test files]
 ok      github.com/adam-hanna/sessions/auth		0.003s  coverage: 100.0% of statements
 ok      github.com/adam-hanna/sessions/store		0.006s  coverage: 85.4% of statements
 ok      github.com/adam-hanna/sessions/benchmark	0.004s  coverage: 0.0% of statements [no tests to run]
@@ -229,7 +203,7 @@ var issueSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 	csrf, err := generateKey()
 	if err != nil {
 		log.Printf("Err generating csrf: %v\n", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -239,14 +213,14 @@ var issueSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 	JSONBytes, err := json.Marshal(myJSON)
 	if err != nil {
 		log.Printf("Err marhsalling json: %v\n", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	userSession, seshErr := sesh.IssueUserSession("fakeUserID", string(JSONBytes[:]), w)
-	if seshErr != nil {
-		log.Printf("Err issuing user session: %v\n", seshErr)
-		http.Error(w, seshErr.Err.Error(), seshErr.Code)
+	userSession, err := sesh.IssueUserSession("fakeUserID", string(JSONBytes[:]), w)
+	if err != nil {
+		log.Printf("Err issuing user session: %v\n", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	log.Printf("In issue; user's session: %v\n", userSession)
@@ -266,10 +240,15 @@ var issueSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 })
 
 var requiresSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	userSession, seshErr := sesh.GetUserSession(r)
-	if seshErr != nil {
-		log.Printf("Err fetching user session: %v\n", seshErr)
-		http.Error(w, seshErr.Err.Error(), seshErr.Code)
+	userSession, err := sesh.GetUserSession(r)
+	if err != nil {
+		log.Printf("Err fetching user session: %v\n", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	// nil session pointers indicate a 401 unauthorized
+	if userSession == nil {
+		http.Error(w, "Unathorized", http.StatusUnauthorized)
 		return
 	}
 	log.Printf("In require; user session expiration before extension: %v\n", userSession.ExpiresAt.UTC())
@@ -291,10 +270,9 @@ var requiresSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 	}
 
 	// note that session expiry's need to be manually extended
-	seshErr = sesh.ExtendUserSession(userSession, r, w)
-	if seshErr != nil {
-		log.Printf("Err extending user session: %v\n", seshErr)
-		http.Error(w, seshErr.Err.Error(), seshErr.Code)
+	if err = sesh.ExtendUserSession(userSession, r, w); err != nil {
+		log.Printf("Err extending user session: %v\n", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	log.Printf("In require; users session expiration after extension: %v\n", userSession.ExpiresAt.UTC())
@@ -317,7 +295,12 @@ var clearSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 	userSession, err := sesh.GetUserSession(r)
 	if err != nil {
 		log.Printf("Err fetching user session: %v\n", err)
-		http.Error(w, err.Err.Error(), err.Code)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	// nil session pointers indicate a 401 unauthorized
+	if userSession == nil {
+		http.Error(w, "Unathorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -326,7 +309,7 @@ var clearSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 	myJSON := SessionJSON{}
 	if err := json.Unmarshal([]byte(userSession.JSON), &myJSON); err != nil {
 		log.Printf("Err unmarshalling json: %v\n", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	log.Printf("In require; user's custom json: %v\n", myJSON)
@@ -339,10 +322,9 @@ var clearSession = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err = sesh.ClearUserSession(userSession, w)
-	if err != nil {
+	if err = sesh.ClearUserSession(userSession, w); err != nil {
 		log.Printf("Err clearing user session: %v\n", err)
-		http.Error(w, err.Err.Error(), err.Code)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -365,23 +347,19 @@ func main() {
 	seshStore := store.New(store.Options{})
 
 	// e.g. `$ openssl rand -base64 64`
-	authKey := "DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="
-	authOptions := auth.Options{
-		Key: []byte(authKey),
-	}
-	seshAuth, err := auth.New(authOptions)
+	seshAuth, err := auth.New(auth.Options{
+		Key: []byte("DOZDgBdMhGLImnk0BGYgOUI+h1n7U+OdxcZPctMbeFCsuAom2aFU4JPV4Qj11hbcb5yaM4WDuNP/3B7b+BnFhw=="),
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	transportOptions := transport.Options{
+	seshTransport := transport.New(transport.Options{
 		HTTPOnly: true,
 		Secure:   false, // note: can't use secure cookies in development!
-	}
-	seshTransport := transport.New(transportOptions)
+	})
 
-	seshOptions := sessions.Options{}
-	sesh = sessions.New(seshStore, seshAuth, seshTransport, seshOptions)
+	sesh = sessions.New(seshStore, seshAuth, seshTransport, sessions.Options{})
 
 	http.HandleFunc("/issue", issueSession)
 	http.HandleFunc("/require", requiresSession)
@@ -391,7 +369,7 @@ func main() {
 	log.Fatal(http.ListenAndServe("127.0.0.1:3000", nil))
 }
 
-// thanks!
+// thanks
 // https://astaxie.gitbooks.io/build-web-application-with-golang/en/06.2.html#unique-session-ids
 func generateKey() (string, error) {
 	b := make([]byte, 16)
