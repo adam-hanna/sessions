@@ -137,19 +137,9 @@ ExtendUserSession extends the ExpiresAt of a session by the Options.ExpirationDu
 
 Note that this function must be called, manually! Extension of user session expiry's does not happen automatically!
 
-~~~go
-userSession, err := sesh.IssueUserSession("fakeUserID", "", w)
-if err != nil {
-log.Printf("Err issuing user session: %v\n", err)
-	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	return
-}
-~~~
-
-## Test Coverage
+## Testing Coverage
 ~~~bash
 ok      github.com/adam-hanna/sessions			9.012s  coverage: 94.1% of statements
-?       github.com/adam-hanna/sessions/sessionerrs	[no test files]
 ok      github.com/adam-hanna/sessions/auth		0.003s  coverage: 100.0% of statements
 ok      github.com/adam-hanna/sessions/store		0.006s  coverage: 85.4% of statements
 ok      github.com/adam-hanna/sessions/benchmark	0.004s  coverage: 0.0% of statements [no tests to run]

@@ -75,7 +75,7 @@ func (s *Service) ClearUserSession(userSession *user.Session, w http.ResponseWri
 }
 
 // GetUserSession returns a user session from a request. This method only returns valid sessions. Therefore, \
-// sessions that have expired, or that fail signature verification will return a custom session error with code 401
+// sessions that have expired, or that fail signature verification will return a nil pointer to a user.Session
 func (s *Service) GetUserSession(r *http.Request) (*user.Session, error) {
 	// read the session from the request
 	signedSessionID, err := s.transport.FetchSessionIDFromRequest(r)
