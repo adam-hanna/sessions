@@ -1,0 +1,4 @@
+github.com/garyburd/redigo v0.0.0-20170216214944-0d253a66e6e1 h1:EMQBnddyoHv0zXA5BwDHsI12dSbmCQlFfpYtcyL9Uh8=
+github.com/garyburd/redigo v0.0.0-20170216214944-0d253a66e6e1/go.mod h1:NR3MbYisc3/PwhQ00EMzDiPmrwpPxAn5GI05/YaO1SY=
+github.com/pborman/uuid v0.0.0-20170112150404-1b00554d8222 h1:goeTyGkArOZIVOMA0dQbyuPWGNQJZGPwPu/QS9GlpnA=
+github.com/pborman/uuid v0.0.0-20170112150404-1b00554d8222/go.mod h1:VyrYX9gd7irzKovcSS6BIIEwPRkP2Wm2m9ufcdFSJ34=
