@@ -1,5 +1,7 @@
 [![Build Status](https://travis-ci.org/adam-hanna/sessions.svg)](https://travis-ci.org/adam-hanna/sessions) [![Coverage Status](https://coveralls.io/repos/github/adam-hanna/sessions/badge.svg)](https://coveralls.io/github/adam-hanna/sessions) [![Go Report Card](https://goreportcard.com/badge/github.com/adam-hanna/sessions)](https://goreportcard.com/report/github.com/adam-hanna/sessions) [![GoDoc](https://godoc.org/github.com/adam-hanna/sessions?status.svg)](https://godoc.org/github.com/adam-hanna/sessions)
 
+If you're interested in jwt's, see my [jwt library](https://github.com/adam-hanna/jwt-auth)!
+
 # Sessions
 A dead simple, highly performant, highly customizable sessions service for go http servers.
 

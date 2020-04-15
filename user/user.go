@@ -3,7 +3,7 @@ package user
 import (
 	"time"
 
-	"github.com/pborman/uuid"
+	"github.com/google/uuid"
 )
 
 // Session is a user's session struct
@@ -17,7 +17,7 @@ type Session struct {
 // New returns a new user Session
 func New(userID string, json string, duration time.Duration) *Session {
 	return &Session{
-		ID:        uuid.New(),
+		ID:        uuid.New().String(),
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(duration).UTC(),
 		JSON:      json,
