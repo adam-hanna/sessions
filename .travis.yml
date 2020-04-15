@@ -1,6 +1,6 @@
 language: go
 go:
-- 1.7.x
+- 1.14.x
 # branches:
 #   only:
 #   - feature/travisCI
@@ -13,7 +13,7 @@ install:
 - go get golang.org/x/tools/cmd/cover
 - go get github.com/mattn/goveralls
 - go get github.com/garyburd/redigo/redis
-- go get github.com/pborman/uuid
+- go get github.com/google/uuid
 script:
 - make test-cover-html
 - $(go env GOPATH | awk 'BEGIN{FS=":"} {print $1}')/bin/goveralls -coverprofile=coverage-all.out

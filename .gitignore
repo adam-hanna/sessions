@@ -2,3 +2,5 @@
 
 coverage.out
 coverage-all.out
+
+vendor/
