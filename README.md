@@ -49,7 +49,7 @@ if err != nil {
 }
 // nil session pointers indicate a 401 unauthorized
 if userSession == nil {
-	http.Error(w, "Unathorized", http.StatusUnauthorized)
+	http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	return
 }
 
